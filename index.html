@@ -34,6 +34,16 @@
   </div>
 
   <div class="input-group">
+    <label for="accountIdentifier">Email or Username</label>
+    <input type="text" id="accountIdentifier" placeholder="Email or username for this account" autocapitalize="none" autocomplete="username">
+  </div>
+
+  <div class="input-group">
+    <label for="version">Password Reset Count</label>
+    <input type="number" id="version" value="0" min="0" step="1">
+  </div>
+
+  <div class="input-group">
     <label for="length">Password Length</label>
     <input type="number" id="length" value="16" min="8" max="64">
   </div>
@@ -50,8 +60,9 @@
      * Generates a deterministic password using Web Crypto API.
      * Must be run in a secure context (HTTPS or localhost).
      */
-    async function generateSecurePassword(masterSecret, identifier, length = 16) {
+    async function generateSecurePassword(masterSecret, siteIdentifier, accountIdentifier, version, length = 16) {
       const enc = new TextEncoder();
+      const salt = JSON.stringify([siteIdentifier, accountIdentifier, version]);
       
       const keyMaterial = await window.crypto.subtle.importKey(
         "raw",
@@ -64,7 +75,7 @@
       const derivedBuffer = await window.crypto.subtle.deriveBits(
         {
           name: "PBKDF2",
-          salt: enc.encode(identifier),
+          salt: enc.encode(salt),
           iterations: 100000,
           hash: "SHA-256"
         },
@@ -88,24 +99,28 @@
     async function runGenerator() {
       // 1. Grab values from the UI inputs
       const masterSecret = document.getElementById('masterSecret').value;
-      const identifier = document.getElementById('identifier').value;
+      const siteIdentifier = document.getElementById('identifier').value.trim();
+      const accountIdentifier = document.getElementById('accountIdentifier').value.trim();
+      const versionInput = document.getElementById('version').value;
+      const version = Number(versionInput);
       const length = parseInt(document.getElementById('length').value, 10);
 
       // 2. Basic validation
-      if (!masterSecret || !identifier) {
-        document.getElementById('output').textContent = "Please enter both secret and identifier.";
+      if (!masterSecret || !siteIdentifier || !accountIdentifier) {
+        document.getElementById('output').textContent = "Please enter the secret, site identifier, and email or username.";
+        return;
+      }
+
+      if (!versionInput.trim() || !Number.isSafeInteger(version) || version < 0) {
+        document.getElementById('output').textContent = "Please enter a valid password reset count.";
         return;
       }
 
       try {
         // 3. Generate and display the password
         document.getElementById('output').textContent = "Generating...";
-        
-        // Slight delay so the "Generating..." text renders before the CPU-heavy PBKDF2 blocks the main thread
-        setTimeout(async () => {
-          const pwd = await generateSecurePassword(masterSecret, identifier, length);
-          document.getElementById('output').textContent = pwd;
-        }, 10);
+        const pwd = await generateSecurePassword(masterSecret, siteIdentifier, accountIdentifier, version, length);
+        document.getElementById('output').textContent = pwd;
 
       } catch (error) {
         console.error("Crypto error:", error);
