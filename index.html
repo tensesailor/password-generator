@@ -4,11 +4,43 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Local Password Generator</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; max-width: 400px; margin: auto; }
+    .input-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; }
+    input { width: 100%; padding: 8px; box-sizing: border-box; font-size: 16px; }
+    button { padding: 10px 15px; font-size: 16px; width: 100%; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+    button:active { background-color: #0056b3; }
+    .result-box { margin-top: 20px; padding: 15px; background: #f4f4f4; border-radius: 5px; text-align: center; word-break: break-all; }
+    #output { font-family: monospace; font-size: 18px; font-weight: bold; }
+  </style>
 </head>
 <body>
   <h2>Password Generator</h2>
+  
+  <div class="input-group">
+    <label for="masterSecret">Master Secret</label>
+    <!-- type="password" hides the input so it isn't shoulder-surfed -->
+    <input type="password" id="masterSecret" placeholder="Your master passphrase">
+  </div>
+  
+  <div class="input-group">
+    <label for="identifier">Site Identifier</label>
+    <!-- autocapitalize="none" prevents iOS from capitalizing the first letter -->
+    <input type="text" id="identifier" placeholder="e.g., github.com|v1" autocapitalize="none" autocomplete="off">
+  </div>
+
+  <div class="input-group">
+    <label for="length">Password Length</label>
+    <input type="number" id="length" value="16" min="8" max="64">
+  </div>
+
   <button onclick="runGenerator()">Generate Password</button>
-  <p>Result: <span id="output" style="font-family: monospace;">(waiting)</span></p>
+  
+  <div class="result-box">
+    <p style="margin: 0 0 10px 0;">Result:</p>
+    <span id="output">(waiting)</span>
+  </div>
 
   <script>
     /**
@@ -18,7 +50,6 @@
     async function generateSecurePassword(masterSecret, identifier, length = 16) {
       const enc = new TextEncoder();
       
-      // 1. Import the master secret as base key material
       const keyMaterial = await window.crypto.subtle.importKey(
         "raw",
         enc.encode(masterSecret),
@@ -27,8 +58,6 @@
         ["deriveBits"]
       );
 
-      // 2. Perform Key Stretching via PBKDF2
-      // We need 2 bytes per password character to reduce modulo bias.
       const derivedBuffer = await window.crypto.subtle.deriveBits(
         {
           name: "PBKDF2",
@@ -40,28 +69,41 @@
         length * 16 
       );
 
-      // Convert the ArrayBuffer to a manipulable typed array
       const stretchedKey = new Uint8Array(derivedBuffer);
       const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+';
       let password = '';
 
-      // 3. Map the bytes directly to the charset
       for (let i = 0; i < length; i++) {
         const combinedInt = (stretchedKey[i * 2] << 8) | stretchedKey[i * 2 + 1];
         password += charset[combinedInt % charset.length];
       }
 
-      // 4. Zero-out the typed array in memory to prevent scraping
       stretchedKey.fill(0);
-
       return password;
     }
 
-    // Example Usage
     async function runGenerator() {
+      // 1. Grab values from the UI inputs
+      const masterSecret = document.getElementById('masterSecret').value;
+      const identifier = document.getElementById('identifier').value;
+      const length = parseInt(document.getElementById('length').value, 10);
+
+      // 2. Basic validation
+      if (!masterSecret || !identifier) {
+        document.getElementById('output').textContent = "Please enter both secret and identifier.";
+        return;
+      }
+
       try {
-        const pwd = await generateSecurePassword("MySuperSecretMasterKey123!", "genesys0", 16);
-        document.getElementById('output').textContent = pwd;
+        // 3. Generate and display the password
+        document.getElementById('output').textContent = "Generating...";
+        
+        // Slight delay so the "Generating..." text renders before the CPU-heavy PBKDF2 blocks the main thread
+        setTimeout(async () => {
+          const pwd = await generateSecurePassword(masterSecret, identifier, length);
+          document.getElementById('output').textContent = pwd;
+        }, 10);
+
       } catch (error) {
         console.error("Crypto error:", error);
         document.getElementById('output').textContent = "Error generating password.";
