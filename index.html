@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Local Password Generator</title>
+</head>
+<body>
+  <h2>Password Generator</h2>
+  <button onclick="runGenerator()">Generate Password</button>
+  <p>Result: <span id="output" style="font-family: monospace;">(waiting)</span></p>
+
+  <script>
+    /**
+     * Generates a deterministic password using Web Crypto API.
+     * Must be run in a secure context (HTTPS or localhost).
+     */
+    async function generateSecurePassword(masterSecret, identifier, length = 16) {
+      const enc = new TextEncoder();
+      
+      // 1. Import the master secret as base key material
+      const keyMaterial = await window.crypto.subtle.importKey(
+        "raw",
+        enc.encode(masterSecret),
+        { name: "PBKDF2" },
+        false,
+        ["deriveBits"]
+      );
+
+      // 2. Perform Key Stretching via PBKDF2
+      // We need 2 bytes per password character to reduce modulo bias.
+      const derivedBuffer = await window.crypto.subtle.deriveBits(
+        {
+          name: "PBKDF2",
+          salt: enc.encode(identifier),
+          iterations: 100000,
+          hash: "SHA-256"
+        },
+        keyMaterial,
+        length * 16 
+      );
+
+      // Convert the ArrayBuffer to a manipulable typed array
+      const stretchedKey = new Uint8Array(derivedBuffer);
+      const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+';
+      let password = '';
+
+      // 3. Map the bytes directly to the charset
+      for (let i = 0; i < length; i++) {
+        const combinedInt = (stretchedKey[i * 2] << 8) | stretchedKey[i * 2 + 1];
+        password += charset[combinedInt % charset.length];
+      }
+
+      // 4. Zero-out the typed array in memory to prevent scraping
+      stretchedKey.fill(0);
+
+      return password;
+    }
+
+    // Example Usage
+    async function runGenerator() {
+      try {
+        const pwd = await generateSecurePassword("MySuperSecretMasterKey123!", "genesys0", 16);
+        document.getElementById('output').textContent = pwd;
+      } catch (error) {
+        console.error("Crypto error:", error);
+        document.getElementById('output').textContent = "Error generating password.";
+      }
+    }
+  </script>
+</body>
+</html>
