@@ -52,6 +52,10 @@
     <legend>Minimum character requirements</legend>
     <p>These settings are part of the generated password. Keep them the same to regenerate it.</p>
     <div class="input-group">
+      <label for="lowercaseCount">Lowercase letters</label>
+      <input type="number" id="lowercaseCount" value="1" min="0" max="64" step="1">
+    </div>
+    <div class="input-group">
       <label for="uppercaseCount">Uppercase letters</label>
       <input type="number" id="uppercaseCount" value="1" min="0" max="64" step="1">
     </div>
@@ -79,13 +83,14 @@
      */
     async function generateSecurePassword(masterSecret, siteIdentifier, accountIdentifier, version, length = 16, requirements = {}) {
       const enc = new TextEncoder();
-      const { uppercase = 1, numbers = 1, symbols = 1 } = requirements;
+      const { lowercase = 1, uppercase = 1, numbers = 1, symbols = 1 } = requirements;
       const salt = JSON.stringify([
         "password-generator-v2",
         siteIdentifier,
         accountIdentifier,
         version,
         length,
+        lowercase,
         uppercase,
         numbers,
         symbols
@@ -121,12 +126,14 @@
         throw new Error("Unable to generate enough random bytes.");
       };
       const pick = (characters) => characters[sampleBelow(characters.length)];
+      const lowercaseCharacters = "abcdefghijklmnopqrstuvwxyz";
       const uppercaseCharacters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
       const numberCharacters = "0123456789";
       const symbolCharacters = "!@#$%^&*()-_=+";
-      const allCharacters = "abcdefghijklmnopqrstuvwxyz" + uppercaseCharacters + numberCharacters + symbolCharacters;
+      const allCharacters = lowercaseCharacters + uppercaseCharacters + numberCharacters + symbolCharacters;
       const passwordCharacters = [];
 
+      for (let i = 0; i < lowercase; i++) passwordCharacters.push(pick(lowercaseCharacters));
       for (let i = 0; i < uppercase; i++) passwordCharacters.push(pick(uppercaseCharacters));
       for (let i = 0; i < numbers; i++) passwordCharacters.push(pick(numberCharacters));
       for (let i = 0; i < symbols; i++) passwordCharacters.push(pick(symbolCharacters));
@@ -150,11 +157,13 @@
       const version = Number(versionInput);
       const length = parseInt(document.getElementById('length').value, 10);
       const requirementInputs = {
+        lowercase: document.getElementById('lowercaseCount').value,
         uppercase: document.getElementById('uppercaseCount').value,
         numbers: document.getElementById('numberCount').value,
         symbols: document.getElementById('symbolCount').value
       };
       const requirements = {
+        lowercase: Number(requirementInputs.lowercase),
         uppercase: Number(requirementInputs.uppercase),
         numbers: Number(requirementInputs.numbers),
         symbols: Number(requirementInputs.symbols)
